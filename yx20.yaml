@@ -1,0 +1,366 @@
+---
+#
+# yx20.yaml
+#
+control:
+    filename: "yx20"
+    dryrun: "n"
+    debug: "y"
+    verbose: "y"
+    emailsendfrom: "yxiao@wickr.com"
+    overwriteoldreport: "n"
+    reportpath: "logs"
+    templatesubdir: "./templates"
+    startup_template: "./appsettings/startup.template"
+    startup: "./appsettings/startup.sh"
+    #
+    # stage 1: vpc,ec2_vpc_igw,ec2_vpc_subnet,ec2_vpc_route_table
+    # stage 2: rds_subnet_group, rds_mysql / (rds_dbcluster, rds_aurora) / dynamodb_table
+    # stage 3: s3
+    # stage 4: ec2_elb, ec2_lc, ec2_asg
+    #
+    modules:
+        #
+        # 1. VPC
+        #
+        #- "ec2_vpc"
+        #- "ec2_vpc_igw"
+        #- "ec2_vpc_subnet"
+        #- "ec2_vpc_route_table"
+        #
+        # 2. RDS/dynamodb
+        #
+        #- "rds_subnet_group"
+        #- "rds_mysql"
+        #- "rds_dbcluster"
+        #- "rds_aurora"
+        #- dynamodb_table
+        #
+        # 3. s3
+        #
+        #- s3
+        #
+        # 4. ELB/LC/ASG
+        #
+        #- "ec2_elb"
+        - "ec2_lc"
+        - "ec2_asg"
+
+
+#
+# tags for all instances
+#
+common:
+    Componment: "xampp"
+    Version: "BETA"
+    VpcName: "vpcYX20"   # make it same with ec2_vpc.Name
+    MyIP: "47.19.17.202"
+    #BUCKET: "wickr-devops-settings"
+    TARGET: "/opt/lampp/phpmyadmin/config.inc.php"
+    CommonFileName: "./appsettings/common-beta.sh"
+
+#
+#
+#
+ec2_vpc:
+    Description: "1.0 - create a VPC, 1.1 - set up InBound and OutBound rules for the security group of the VPC"
+    CidrBlock: "10.0.0.0/16"
+    InstanceTenancy: "default"
+    Name: "vpcYX20"
+    SecurityGroupName: "sgvpcYX20"
+    InBoundRules:
+        # transport layer protocols
+        - protocol: "tcp"
+          port: "80"
+          cidr: "0.0.0.0/0"
+        - protocol: "tcp"
+          port: "443"
+          cidr: "0.0.0.0/0"
+    OutBoundRules:
+
+
+
+#
+#
+#
+ec2_vpc_igw:
+    Description: "1.2 - create an IGW, attach to a the VPC"
+    Name: "igwYX20"
+
+
+#
+# setnet names must be unique
+#
+ec2_vpc_subnet:
+    Description: "1.3 - create subnets in each AZ"
+    count_of_subnets: 4
+    Name:
+        - "YX20 public a"
+        - "YX20 public c"
+        - "YX20 private a"
+        - "YX20 private c"
+    CidrBlock:
+        - "10.0.0.0/24"
+        - "10.0.2.0/24"
+        - "10.0.1.0/24"
+        - "10.0.3.0/24"
+    deployzone:
+        - "us-east-1a"
+        - "us-east-1c"
+        - "us-east-1a"
+        - "us-east-1c"
+
+#
+#
+#
+ec2_vpc_route_table:
+    Description: "1.4 - associate the publuc subnets with the default route table created along with VPC"
+    Name: "rtblYX20"
+    associated_subnets:
+        - "YX20 public a"
+        - "YX20 public c"
+
+
+
+#
+# [rds_subnet_group]
+# used by [rds]
+#
+rds_subnet_group:
+    Description: "2.0 - create a DB subnet group within a VPC for this RDS instance, which contains all associated private subnets"
+    Name: "dbsngvpcyx20"   # case-insensitive !
+    associated_subnets:
+        - "YX20 private a"
+        - "YX20 private c"
+
+
+
+#
+# [rds_mysql_old]
+#
+rds_mysql_old:    # aws rds db-instance
+    Description: "2.1 - create a MYSQL DB instance within the rds_subnet_group"
+    Name: "rdsYX20" # make it same with DBInstanceIdentifier, no special characters.
+    # below are attibutes needed in create-db-instance.input
+    DBName: "dbYX20"
+    DBInstanceIdentifier: "rdsYX20"        # used by $cfg['Servers'][$i]['host']  in /opt/lampp/phpmyadmin/config.inc.php
+    DBSubnetGroupName: "dbsngvpcyx20"     # same with that rds_subnet_group.Name
+    #
+    AllocatedStorage: "30"
+    DBInstanceClass: "db.t2.micro"
+    Engine: "mysql"
+    EngineVersion: "5.6.27"
+    DBParameterGroupName: "default.mysql5.6"
+    StorageType: "gp2"
+    MultiAZ: "true"
+    #
+    MasterUsername: "root"
+    MasterUserPassword: "password"
+    Port: "3306"
+    #
+    # Requesting a specific availability zone
+    # can't be used along with MultiAZ: true
+    #
+    # AvailabilityZone: "us-east-1a"
+    #
+    PreferredMaintenanceWindow: "thu:03:36-thu:04:06"
+    BackupRetentionPeriod: "35"
+    PreferredBackupWindow: "05:49-06:19"
+    AutoMinorVersionUpgrade: "true"
+    StorageEncrypted: "false"
+    CopyTagsToSnapshot: "true"
+
+
+#
+# [rds_mysql]
+#
+rds_mysql:     # aws rds db-instance:
+    Description: "2.1 - create a MySQL DB cluster instance within the rds_subnet_group"
+    Name: "rdsYX20" # make it same with DBInstanceIdentifier, no special characters.
+    # below are attibutes needed in create-db-instance.input
+    json_data:
+        #
+        # identifier
+        #
+        DBName: "dbYX20"
+        DBInstanceIdentifier: "rdsYX20"        # used by $cfg['Servers'][$i]['host']  in /opt/lampp/phpmyadmin/config.inc.php
+        DBSubnetGroupName: "dbsngvpcyx20"     # same with that rds_subnet_group.Name
+        #
+        # storage
+        #
+        AllocatedStorage: 30
+        DBInstanceClass: "db.t2.micro"
+        Engine: "mysql"
+        EngineVersion: "5.6.27"
+        DBParameterGroupName: "default.mysql5.6"
+        StorageType: "gp2"
+        StorageEncrypted: false
+        MultiAZ: true
+        #
+        # credential
+        #
+        MasterUsername: "root"
+        MasterUserPassword: "password"
+        Port: 3306
+        #
+        # maintenance
+        #
+        PreferredMaintenanceWindow: "thu:03:36-thu:04:06"
+        BackupRetentionPeriod: 35
+        PreferredBackupWindow: "05:49-06:19"
+        AutoMinorVersionUpgrade: true
+        CopyTagsToSnapshot: true
+
+
+
+#
+# [rds_dbcluster]
+#
+rds_dbcluster:
+    Description: "2.0 - create a db cluster for Aurora DB instances"
+    Name: "rdsclusteryx20"
+    json_data:
+        DBClusterIdentifier: "rdsyx20"     # case insensitive!
+        DBClusterParameterGroupName: "default.aurora5.6"
+        DBSubnetGroupName: "dbsngvpcyx20"  # case insensitive!
+        DatabaseName: "dbyx20"
+        Engine: "aurora"
+        EngineVersion: "5.6.10a"
+        MasterUsername: "root"
+        MasterUserPassword: "password"
+        Port: 3306
+        BackupRetentionPeriod: 35
+        StorageEncrypted: true
+        AvailabilityZones:
+          - "us-east-1a"
+          - "us-east-1c"
+
+
+
+#
+# [rds_aurora]
+#
+rds_aurora:     # aws rds db-instance:
+    Description: "2.1 - create an Aurora DB cluster instance within the rds_subnet_group"
+    Name: "rdsyx20" # make it same with DBInstanceIdentifier, no special characters.
+    # below are attibutes needed in create-db-instance.input
+    json_data:
+        #
+        # identifier
+        #
+        #DBName: "dbYX20"
+        DBClusterIdentifier: "rdsyx20"         # case insensitive!        
+        DBInstanceIdentifier: "dbiyx20"        # used by $cfg['Servers'][$i]['host']  in /opt/lampp/phpmyadmin/config.inc.php
+        DBSubnetGroupName: "dbsngvpcyx20"     # same with that rds_subnet_group.Name
+        #
+        # storage
+        #
+        #AllocatedStorage: 100
+        DBInstanceClass: "db.r3.large"
+        Engine: "aurora"
+        EngineVersion: "5.6.10a"
+        DBParameterGroupName: "default.aurora5.6"
+        StorageType: "aurora"
+        StorageEncrypted: true
+        MultiAZ: false
+        #
+        # credential
+        #
+        #MasterUsername: "root"
+        #MasterUserPassword: "password"
+        #Port: 3306
+        #
+        # maintenance
+        #
+        PreferredMaintenanceWindow: "thu:03:36-thu:04:06"
+        #BackupRetentionPeriod: 35
+        #PreferredBackupWindow: "05:49-06:19"
+        AutoMinorVersionUpgrade: true
+        CopyTagsToSnapshot: true
+
+
+
+dynamodb_table:
+    Description: "2.1 - create a dynamodb componment"
+    Name: "dydbyx20"
+
+
+#s3:
+#    Description: "3.0 - create a script common.sh in bucket wickrsettings"
+#    Name: "./appsettings/common-beta.sh"
+#    Region: "us-east-1"
+#    CreateBucket: "n"
+
+
+#
+# assume SSLCertificate has been created if HTTPS is needed
+#
+ec2_elb:
+    Description: "4.0 - create a load balancer"
+    Name: "elbYX20"
+    # SSLCertificateId: "arn:aws:iam::123456789012:server-certificate/my-server-cert"
+    subnets:
+      - "YX20 public a"
+      - "YX20 public c"
+    json_data: # aws elb create-load-balancer
+      LoadBalancerName: "elbYX20"
+      Listeners:
+        - Protocol: "HTTP"
+          LoadBalancerPort: 80
+          InstanceProtocol: "HTTP"
+          InstancePort: 80
+          SSLCertificateId: ""
+    configure-health-check:
+      json_data: # aws elb configure-health-check
+        LoadBalancerName: "elbYX20"
+        HealthCheck:
+          Target: "TCP:80" 
+          Timeout: 5
+          Interval: 30 
+          UnhealthyThreshold: 10
+          HealthyThreshold: 2
+
+
+ec2_lc:
+    Description: "4.1 - create a launch configuration"
+    Name: "lcYX20"
+    ImageId: "ami-f600e59b"
+    KeyName: "yx02"
+    InstanceType: "t2.micro"
+
+
+ec2_asg:
+    Description: "4.2 - create an autoscaling group"
+    Name: "asgYX20"
+    #
+    # elb
+    # lc
+    #
+    min-size: "2"
+    max-size: "4"
+    subnets:
+      - "YX20 public a"
+      - "YX20 public c"
+    #
+    # the count of policies & alarms should be same
+    #
+    policies:
+      - policy-name: "policy-AddCapacity"
+        scaling-adjustment: "50"
+        adjustment-type: "PercentChangeInCapacity"
+      - policy-name: "policy-RemoveCapacity"
+        scaling-adjustment: "-1"
+        adjustment-type: "ChangeInCapacity"
+    alarms:
+      - alarm-name: "alarm-HIGH-CPUUtilization"
+        metric-name: "CPUUtilization"
+        period: "120"
+        comparison-operator: "GreaterThanOrEqualToThreshold"
+        threshold: "90"
+        evaluation-periods: "2"
+      - alarm-name: "alarm-LOW-CPUUtilization"
+        metric-name: "CPUUtilization"
+        period: "120"
+        comparison-operator: "LessThanOrEqualToThreshold"
+        threshold: "10"
+        evaluation-periods: "2"

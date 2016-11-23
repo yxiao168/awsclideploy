@@ -1,0 +1,7 @@
+#
+# startup.template
+# 
+cd /root
+cp "${TARGET}" old-1.txt
+cat old-1.txt | sed -e "s/xxxxxxxx01/${rds_endpoint}/" > new-1.txt
+cp new-1.txt "${TARGET}"
