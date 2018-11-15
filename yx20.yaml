@@ -7,7 +7,7 @@ control:
     dryrun: "n"
     debug: "y"
     verbose: "y"
-    emailsendfrom: "yxiao@wickr.com"
+    emailsendfrom: "yxiao@yourcompany.com"
     overwriteoldreport: "n"
     reportpath: "logs"
     templatesubdir: "./templates"
