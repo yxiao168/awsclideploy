@@ -4,7 +4,7 @@
 # awsclideploy.py
 #
 # Yanming Xiao
-# yanming_xiao@yahoo.com
+#
 #
 # Run mode:
 #   $ ./awsclideploy.py { build | delete } {deployment.ini}
